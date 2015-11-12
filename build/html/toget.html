@@ -1,0 +1,361 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>插件编写说明 &mdash; BugScan 0.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="BugScan 0.0.1 documentation" href="index.html" />
+    <link rel="prev" title="BugScan使用说明" href="howto.html" />
+   
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9">
+
+  </head>
+  <body role="document">  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="id1">
+<h1>插件编写说明<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="sdk">
+<h2>插件接口文档(SDK)<a class="headerlink" href="#sdk" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><a class="reference external" href="https://www.bugscan.net/sdk.zip">SDK下载</a></li>
+</ul>
+<div class="section" id="id2">
+<h3>插件调用流程<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h3>
+<p>插件两种类型: 审计(主动) and 过滤(被动)</p>
+<img alt="_images/liucheng.png" src="_images/liucheng.png" />
+</div>
+</div>
+<div class="section" id="example">
+<h2>编写样例(Example)<a class="headerlink" href="#example" title="Permalink to this headline">¶</a></h2>
+<ul>
+<li><p class="first">以下是一个典型的带有详细注释的审计类型的插件，检测robots.txt的敏感信息:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c">#!/usr/bin/env python</span>
+<span class="c"># Can import any built-in Python Library</span>
+<span class="kn">import</span> <span class="nn">urlparse</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="n">service</span><span class="p">,</span> <span class="n">arg</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Input Parameter:</span>
+<span class="sd">        service represents the type of the arg parameter:</span>
+<span class="sd">            &#39;www&#39;       : arg is a URL such as http://www.abc.com/news.php?id=10</span>
+<span class="sd">            &#39;www-form&#39;  : arg is a dict structure of a HTML form</span>
+<span class="sd">                            {</span>
+<span class="sd">                                &#39;action&#39;: &#39;http://www.abc.com/login.asp&#39;,</span>
+<span class="sd">                                &#39;inputs&#39;: [</span>
+<span class="sd">                                        {&#39;type&#39;: u&#39;text&#39;, &#39;name&#39;: u&#39;login&#39;, &#39;value&#39;: &#39;test&#39;},</span>
+<span class="sd">                                        {&#39;type&#39;: u&#39;password&#39;, &#39;name&#39;: u&#39;password&#39;, &#39;value&#39;: &#39;test&#39;},</span>
+<span class="sd">                                        {&#39;type&#39;: u&#39;radio&#39;, &#39;name&#39;: u&#39;graphicOption&#39;, &#39;value&#39;: u&#39;minimum&#39;}</span>
+<span class="sd">                                        ],</span>
+<span class="sd">                                &#39;ref&#39;: &#39;http://www.abc.com/&#39;,</span>
+<span class="sd">                                &#39;method&#39;: u&#39;post&#39;</span>
+<span class="sd">                            }</span>
+
+<span class="sd">            &#39;ip&#39;        : arg is a IP Address, such as 1.1.1.1</span>
+<span class="sd">            &#39;dns&#39;       : arg is a Host domain, such as bbs.abc.com</span>
+
+<span class="sd">            These parameters are create by the Port_and_Service_Discover built-in plugin</span>
+<span class="sd">                service is one of &#39;ssh&#39;, &#39;ftp&#39;, &#39;mssql&#39;, &#39;mysql&#39;, &#39;telnet&#39;, &#39;vnc&#39;</span>
+<span class="sd">                arg is a tuple type like (ipaddr, port)</span>
+
+<span class="sd">            These parameters are create by Web_Application_Recognition Plugin</span>
+<span class="sd">                service is one of &#39;discuz&#39;, &#39;phpwind&#39;, &#39;wordpress&#39;, &#39;dedecms&#39;, &#39;php168&#39;, &#39;phpmyadmin&#39;, etc ...</span>
+<span class="sd">                arg is a URL</span>
+<span class="sd">    Ret Value:</span>
+<span class="sd">        First value:</span>
+<span class="sd">            True:  Accept the dispatch</span>
+<span class="sd">            False: Reject the dispatch</span>
+
+<span class="sd">        Second value:</span>
+<span class="sd">            the parameter of funtion audit to be received, any type, if type is list, such as [1,2,3]</span>
+<span class="sd">            The system automatically call function &#39;audit&#39; three times, such as: audit(true, 1), audit(true, 2), audit(true, 3)</span>
+
+<span class="sd">        Third Value: (optional)</span>
+<span class="sd">            Uniquely identifies of the sub task, prevent sub task repeated</span>
+<span class="sd">            This parameter is useful in the detection of specific vulnerabilities,</span>
+<span class="sd">            such as you only want to audit PHP suffix URL just once, do not want all PHP files are detected, you can return like:</span>
+<span class="sd">                return True, arg, &#39;php&#39;</span>
+<span class="sd">            &#39;php&#39; is the custom uuid of the sub task</span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="k">if</span> <span class="n">service</span> <span class="o">!=</span> <span class="s">&quot;www&quot;</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="n">arr</span> <span class="o">=</span> <span class="n">urlparse</span><span class="o">.</span><span class="n">urlparse</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+    <span class="nb">str</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%s</span><span class="s">://</span><span class="si">%s</span><span class="s">/robots.txt&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">scheme</span><span class="p">,</span> <span class="n">arr</span><span class="o">.</span><span class="n">netloc</span><span class="p">)</span>
+    <span class="c">#arg为返回的链接, pr为优先级,可以指定唯一uuid</span>
+    <span class="k">return</span> <span class="bp">True</span><span class="p">,[{</span><span class="s">&#39;arg&#39;</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span><span class="s">&#39;pr&#39;</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="s">&#39;uuid&#39;</span><span class="p">:</span><span class="n">none</span><span class="p">},]</span>
+
+
+<span class="k">def</span> <span class="nf">audit</span><span class="p">(</span><span class="n">arg</span><span class="p">):</span>
+    <span class="c"># arg is the second value returned by function &#39;assign&#39;</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="n">arg</span>
+    <span class="n">code</span><span class="p">,</span> <span class="n">head</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">errcode</span><span class="p">,</span> <span class="n">final_url</span> <span class="o">=</span> <span class="n">curl</span><span class="o">.</span><span class="n">curl</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">code</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">&#39;Content\-Type:\s+[^</span><span class="se">\n</span><span class="s">]*text[^</span><span class="se">\n</span><span class="s">]+&#39;</span><span class="p">,</span> <span class="n">head</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">M</span><span class="p">)</span> <span class="ow">and</span> <span class="n">res</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s">&#39;&lt;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+            <span class="n">sensitive_info</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+            <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">re</span><span class="o">.</span><span class="n">finditer</span><span class="p">(</span><span class="s">&#39;[^</span><span class="se">\r\n</span><span class="s">]+(admin|manage)[^</span><span class="se">\r\n</span><span class="s">]+&#39;</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">M</span> <span class="o">|</span> <span class="n">re</span><span class="o">.</span><span class="n">I</span><span class="p">):</span>
+                <span class="n">sensitive_info</span> <span class="o">+=</span> <span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">sensitive_info</span> <span class="o">=</span> <span class="n">sensitive_info</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">sensitive_info</span><span class="p">:</span>
+                <span class="n">security_note</span><span class="p">(</span><span class="n">url</span> <span class="o">+</span> <span class="s">&#39; : &#39;</span> <span class="o">+</span> <span class="n">sensitive_info</span><span class="p">)</span>
+
+
+<span class="c"># Test code</span>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="c"># import local simulation environment</span>
+    <span class="kn">from</span> <span class="nn">dummy</span> <span class="kn">import</span> <span class="o">*</span>
+    <span class="n">audit</span><span class="p">(</span><span class="n">assign</span><span class="p">(</span><span class="s">&#39;www&#39;</span><span class="p">,</span> <span class="s">&#39;http://www.discuz.net/&#39;</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">另一个例子来检测discuz CMS的路径:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c">#!/usr/bin/env python</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="k">def</span> <span class="nf">assign</span><span class="p">(</span><span class="n">service</span><span class="p">,</span> <span class="n">arg</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">service</span> <span class="o">==</span> <span class="s">&quot;discuz&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">True</span><span class="p">,</span> <span class="p">[{</span><span class="s">&#39;arg&#39;</span><span class="p">:</span><span class="n">arg</span><span class="p">,</span><span class="s">&#39;pr&#39;</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="s">&#39;uuid&#39;</span><span class="p">:</span><span class="n">none</span><span class="p">},]</span>
+
+<span class="k">def</span> <span class="nf">audit</span><span class="p">(</span><span class="n">arg</span><span class="p">):</span>
+    <span class="n">code</span><span class="p">,</span> <span class="n">head</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">errcode</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">curl</span><span class="o">.</span><span class="n">curl</span><span class="p">(</span><span class="n">arg</span> <span class="o">+</span> <span class="s">&#39;uc_server/control/admin/db.php&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">code</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+        <span class="n">m</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">&#39;not found in ([^&lt;]+) on line (\d+)&#39;</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">m</span><span class="p">:</span>
+            <span class="n">security_info</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">以下是一个典型的过滤式插件，在HTML中寻找上传入口:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c">#!/usr/bin/env python</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Only one function named &#39;audit&#39;, the function is automatically called during the spider crawling</span>
+<span class="sd">    url     : the URL of current page</span>
+<span class="sd">    head    : HTTP Response header</span>
+<span class="sd">    body    : HTTP Body</span>
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="k">def</span> <span class="nf">audit</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">head</span><span class="p">,</span> <span class="n">body</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s">&#39;&lt;input[^&gt;]+type=[</span><span class="se">\&#39;</span><span class="s">&quot;]*file[</span><span class="se">\&#39;</span><span class="s">&quot;]*&#39;</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">I</span><span class="p">):</span>
+        <span class="n">security_note</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">以下是预加载的公共库介绍:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="c">#!/usr/bin/env python</span>
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Task scheduling:</span>
+<span class="sd">    task_push(servie, arg, uuid=None, target=None)  Add a new sub task, such as:</span>
+<span class="sd">        task_push(&#39;www&#39;, &#39;http://www.baidu.com/&#39;)</span>
+<span class="sd">        The scheduler will transfer to all of the audit plugin</span>
+<span class="sd">        If UUID is not specified, the system will automatically generate a UUID</span>
+<span class="sd">        If target is specified, the new task of generating report belongs to the domain name value specified for the target</span>
+
+<span class="sd">Function used to report:</span>
+<span class="sd">    Notify      : security_note(str)</span>
+<span class="sd">    Information : security_info(str)</span>
+<span class="sd">    Warning     : security_warning(str)</span>
+<span class="sd">    High        : security_hole(str)</span>
+
+<span class="sd">The utility function:</span>
+<span class="sd">    is_ipaddr(str)  check if the string is a IP address</span>
+<span class="sd">    decode_html(head, body) Decode to utf-8 cross http response header and body</span>
+<span class="sd">    urljoin(base, ref) such as: urljoin(&#39;http://www.baidu.com/&#39;, &#39;abc/../dd.html&#39;) returned &#39;http://www.baidu.com/dd.html&#39;</span>
+<span class="sd">    html2text(body, head=&#39;&#39;) HTML to Text</span>
+<span class="sd">    get_url_host(url) get the host of url</span>
+<span class="sd">    get_domain_root(url) Get the root domain of a URL (used built-in TLD)</span>
+<span class="sd">    str_ration(str1, str2) return a float value represent of the similarity of two strings</span>
+
+<span class="sd">curl:</span>
+<span class="sd">    curl is a pure Python mini version of cURL, only supports the HTTP protocal</span>
+<span class="sd">    command line format:</span>
+<span class="sd">    [-I | -d DATA] [-A USER_AGENT] [-b COOKIE]</span>
+<span class="sd">                    [--connect-timeout CONNECT_TIMEOUT] [-e REFERER]</span>
+<span class="sd">                    [-H HEADER] [-i] [-m MAX_TIME]</span>
+<span class="sd">                    [--max-filesize MAX_FILESIZE] [--mime-type MIME_TYPE]</span>
+<span class="sd">                    [-L] [--max-redirs MAX_REDIRS] [-T] [--retry RETRY]</span>
+<span class="sd">                    [--retry-delay RETRY_DELAY] [-u USER] [-X REQUEST]</span>
+<span class="sd">                    &lt;url&gt;</span>
+<span class="sd">    --mime-type means function will throw a exception if the Content-Type can not find the string specified by --mime-type</span>
+
+<span class="sd">    return 5 parameter:</span>
+<span class="sd">        code:       HTTP Response Code, int type</span>
+<span class="sd">        head:       HTTP Response header</span>
+<span class="sd">        body:       HTTP Content</span>
+<span class="sd">        errcode:    Error code</span>
+<span class="sd">        final_url:  Redirection of URL, no redirection if same as the visit URL</span>
+
+<span class="sd">Error Code:</span>
+<span class="sd">    CURLE_OK = 0</span>
+<span class="sd">    CURLE_COULDNT_CONNECT = 1</span>
+<span class="sd">    CURLE_OPERATION_TIMEDOUT = 2</span>
+<span class="sd">    CURLE_RECV_ERROR = 3</span>
+<span class="sd">    CURLE_SEND_ERROR = 4</span>
+<span class="sd">    CURLE_FILESIZE_EXCEEDED = 5</span>
+<span class="sd">    CURLE_COULDNT_RESOLVE_HOST = 6</span>
+<span class="sd">    CURLE_UNSUPPORTED_PROTOCOL = 7</span>
+
+<span class="sd">    CURLE_ARG_ERROR = 8</span>
+<span class="sd">    CURLE_MIME_ERROR = 9</span>
+
+<span class="sd">Example:</span>
+<span class="sd">    code, head, body, ecode, redirect_url = curl.curl(&#39;-L http://www.baidu.com&#39;)</span>
+<span class="sd">    GET:</span>
+<span class="sd">        curl.curl(&#39;http://www.abc.com/&#39;)</span>
+<span class="sd">    HEAD:</span>
+<span class="sd">        curl.curl(&#39;-H http://www.abc.com/&#39;)</span>
+<span class="sd">    POST:</span>
+<span class="sd">        curl.curl(&#39;-d user=abc&amp;pass=ddd http://www.abc.com/&#39;)</span>
+<span class="sd">    PUT:</span>
+<span class="sd">        curl.curl(&#39;T -d &quot;Content to put&quot; http://www.abc.com/&#39;)</span>
+<span class="sd">    Cookie:</span>
+<span class="sd">        curl.curl(&#39;-b user=abc&amp;pass=ddd http://www.abc.com/&#39;)</span>
+<span class="sd">    Referer:</span>
+<span class="sd">        curl.curl(&#39;-e http://www.google.com/ http://www.abc.com/&#39;)</span>
+<span class="sd">    Flow Redirect:</span>
+<span class="sd">        curl.curl(&#39;-L http://www.abc.com/&#39;)</span>
+
+<span class="sd">    cURL will automatically accept cookie in the process to obtain the Webpage, second requests will append to request header.</span>
+<span class="sd">    If you want to empty cookies, use curl.reset()</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">dummy</span> <span class="kn">import</span> <span class="o">*</span>
+    <span class="n">code</span><span class="p">,</span> <span class="n">head</span><span class="p">,</span> <span class="n">body</span><span class="p">,</span> <span class="n">error</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">curl</span><span class="o">.</span><span class="n">curl</span><span class="p">(</span><span class="s">&#39;http://www.baidu.com/&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">error</span> <span class="o">==</span> <span class="n">curl</span><span class="o">.</span><span class="n">CURLE_OK</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;OK&quot;</span>
+
+    <span class="k">print</span> <span class="n">util</span><span class="o">.</span><span class="n">is_ipaddr</span><span class="p">(</span><span class="s">&#39;8.8.8.8&#39;</span><span class="p">)</span>
+    <span class="k">print</span> <span class="n">util</span><span class="o">.</span><span class="n">decode_html</span><span class="p">(</span><span class="n">head</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)</span>
+    <span class="k">print</span> <span class="n">util</span><span class="o">.</span><span class="n">urljoin</span><span class="p">(</span><span class="s">&#39;http://www.baidu.com/&#39;</span><span class="p">,</span> <span class="s">&#39;abc/../dd.html&#39;</span><span class="p">)</span>
+    <span class="k">print</span> <span class="n">util</span><span class="o">.</span><span class="n">html2text</span><span class="p">(</span><span class="n">body</span><span class="p">)</span>
+    <span class="k">print</span> <span class="n">util</span><span class="o">.</span><span class="n">get_domain_root</span><span class="p">(</span><span class="s">&quot;www.baidu.com.cn&quot;</span><span class="p">)</span>
+    <span class="k">print</span> <span class="n">util</span><span class="o">.</span><span class="n">get_domain_root</span><span class="p">(</span><span class="s">&quot;http://bbs.sina.com.tw&quot;</span><span class="p">)</span>
+    <span class="k">print</span> <span class="n">util</span><span class="o">.</span><span class="n">str_ratio</span><span class="p">(</span><span class="s">&quot;good&quot;</span><span class="p">,</span> <span class="s">&quot;not good&quot;</span><span class="p">)</span>
+    <span class="n">task_push</span><span class="p">(</span><span class="s">&#39;www&#39;</span><span class="p">,</span> <span class="s">&#39;http://www.baidu.com/&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</div>
+<div class="section" id="id3">
+<h2>一些必要的解释:<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h2>
+<ul>
+<li><dl class="first docutils">
+<dt>DNS Cache &amp; TCP HOOK:</dt>
+<dd><p class="first last">built-in DNS cache, supports multi-threading, HOOK socket levels to limit the maximum number of connections
+gethostbyname,  gethostbyname_r The two functions have been replaced with own DNS package, Limit will cancel after call &#8216;reload(socket)&#8217;</p>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>Link fuzzy filter:</dt>
+<dd><p class="first"><a class="reference external" href="http://www.abc.com/news.asp?id=1">http://www.abc.com/news.asp?id=1</a></p>
+<p><a class="reference external" href="http://www.abc.com/news.asp?id=2">http://www.abc.com/news.asp?id=2</a></p>
+<p><a class="reference external" href="http://www.abc.com/news.asp?id=32">http://www.abc.com/news.asp?id=32</a></p>
+<p>以上这些链接只当成一个url</p>
+<p><a class="reference external" href="http://www.abc.com/20120607.html">http://www.abc.com/20120607.html</a></p>
+<p><a class="reference external" href="http://www.abc.com/20120608.html">http://www.abc.com/20120608.html</a></p>
+<p><a class="reference external" href="http://www.abc.com/20120609.html">http://www.abc.com/20120609.html</a></p>
+<p><a class="reference external" href="http://www.abc.com/20110305.html">http://www.abc.com/20110305.html</a></p>
+<p class="last">以上这些链接也只当成一个url</p>
+</dd>
+</dl>
+</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">插件编写说明</a><ul>
+<li><a class="reference internal" href="#sdk">插件接口文档(SDK)</a><ul>
+<li><a class="reference internal" href="#id2">插件调用流程</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#example">编写样例(Example)</a></li>
+<li><a class="reference internal" href="#id3">一些必要的解释:</a></li>
+</ul>
+</li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="howto.html" title="previous chapter">BugScan使用说明</a></li>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/toget.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2015, DWBH.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.3.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.6</a>
+      
+      |
+      <a href="_sources/toget.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
